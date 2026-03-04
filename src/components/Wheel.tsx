@@ -164,20 +164,20 @@ export default function Wheel() {
     }, [items]);
 
     // ---- Tính góc quay để dừng đúng slice target ----
-    const calcTargetRotation = (targetIdx: number, currentItems: WheelItem[]): number => {
+    // startRotation PHẢI được truyền vào để tính đúng delta rotation cần thiết.
+    // Công thức: startRotation + finalRotation + sliceMidAngle ≡ pointerAngle (mod 2π)
+    // => finalRotation ≡ pointerAngle - sliceMidAngle - startRotation (mod 2π)
+    const calcTargetRotation = (targetIdx: number, currentItems: WheelItem[], startRot: number): number => {
         const sliceAngle = (2 * Math.PI) / currentItems.length;
         const pointerAngle = (3 * Math.PI) / 2; // 12 giờ
 
-        // Góc giữa của slice target (tuyệt đối, không xét rotation)
         const sliceMidAngle = targetIdx * sliceAngle + sliceAngle / 2;
 
-        // Số vòng quay tối thiểu 8-12 vòng
+        // Số vòng quay tối thiểu 8-12 vòng (thêm vào để tạo cảm giác quay đủ lâu)
         const extraSpins = (Math.floor(Math.random() * 5) + 8) * 2 * Math.PI;
 
-        // Để kim dừng đúng giữa slice target:
-        // rotation + sliceMidAngle = pointerAngle (mod 2π)
-        // => rotation = pointerAngle - sliceMidAngle
-        const baseAngle = ((pointerAngle - sliceMidAngle) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+        // baseAngle: góc delta cần quay (chưa tính extra spins) để kim đúng giữa slice target
+        const baseAngle = ((pointerAngle - sliceMidAngle - startRot) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
 
         return extraSpins + baseAngle;
     };
@@ -193,6 +193,9 @@ export default function Wheel() {
         const targetFrames = 60 * (spinDuration / 1000);
         let currentFrame = 0;
 
+        // Lấy startRotation TRƯỚC khi tính finalRotation
+        const startRotation = rotationRef.current;
+
         // Kiểm tra có sequence không, lấy giải tiếp theo
         const nextItem = getNextSequenceItem(config);
         let finalRotation: number;
@@ -206,20 +209,19 @@ export default function Wheel() {
             if (targetIdx === -1) {
                 // Giải bị xóa, random
                 const randomIdx = Math.floor(Math.random() * items.length);
-                finalRotation = calcTargetRotation(randomIdx, items);
+                finalRotation = calcTargetRotation(randomIdx, items, startRotation);
                 determinedResult = items[randomIdx];
             } else {
-                finalRotation = calcTargetRotation(targetIdx, items);
+                finalRotation = calcTargetRotation(targetIdx, items, startRotation);
                 determinedResult = nextItem;
             }
         } else {
             // Ngẫu nhiên
             const randomIdx = Math.floor(Math.random() * items.length);
-            finalRotation = calcTargetRotation(randomIdx, items);
+            finalRotation = calcTargetRotation(randomIdx, items, startRotation);
             determinedResult = items[randomIdx];
         }
 
-        const startRotation = rotationRef.current;
         const easeOutCubic = (x: number) => 1 - Math.pow(1 - x, 3);
 
         const animate = () => {

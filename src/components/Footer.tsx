@@ -121,16 +121,16 @@ export default function Footer() {
 }
 
 const aboutLinks = [
-    { href: "/gioi-thieu", label: "Giới thiệu" },
-    { href: "/lien-he", label: "Liên hệ" },
-    { href: "/dieu-khoan-dich-vu", label: "Điều khoản dịch vụ" },
-    { href: "/mien-tru-trach-nhiem", label: "Miễn trừ trách nhiệm" },
-    { href: "/bo-may-to-chuc", label: "Bộ máy tổ chức" },
+    { href: "/", label: "Giới thiệu" },
+    { href: "/", label: "Liên hệ" },
+    { href: "/", label: "Điều khoản dịch vụ" },
+    { href: "/", label: "Miễn trừ trách nhiệm" },
+    { href: "/", label: "Bộ máy tổ chức" },
 ];
 
 const infoLinks = [
-    { href: "/huong-dan-su-dung", label: "Hướng dẫn sử dụng" },
-    { href: "/ma-nhung", label: "Mã nhúng cho website" },
-    { href: "/hop-tac", label: "Hợp tác với chúng tôi" },
-    { href: "/blog", label: "Blog tin tức" },
+    { href: "/", label: "Hướng dẫn sử dụng" },
+    { href: "/", label: "Mã nhúng cho website" },
+    { href: "/", label: "Hợp tác với chúng tôi" },
+    { href: "/", label: "Blog tin tức" },
 ];

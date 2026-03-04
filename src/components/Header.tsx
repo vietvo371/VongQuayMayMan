@@ -20,8 +20,8 @@ export default function Header() {
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled
-          ? "bg-slate-950/70 backdrop-blur-xl border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] py-3"
-          : "bg-transparent py-5"
+        ? "bg-slate-950/70 backdrop-blur-xl border-b border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.5)] py-3"
+        : "bg-transparent py-5"
         }`}
     >
       <div className="container mx-auto px-6 h-full flex items-center justify-between">
@@ -112,7 +112,7 @@ export default function Header() {
 }
 
 const navLinks = [
-  { href: "/gioi-thieu", label: "Giới Thiệu" },
-  { href: "/lien-he", label: "Liên Hệ" },
-  { href: "/huong-dan-su-dung", label: "Hướng Dẫn" },
+  { href: "/", label: "Giới Thiệu" },
+  { href: "/", label: "Liên Hệ" },
+  { href: "/", label: "Hướng Dẫn" },
 ];
