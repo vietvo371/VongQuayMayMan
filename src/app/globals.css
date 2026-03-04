@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Kế thừa từ CSS gốc một số cấu trúc cơ bản */
+.section-inner {
+  max-width: 1100px;
+  padding-left: 24px;
+  padding-right: 24px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 768px) {
+  .section-inner {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* Card với hiệu ứng kính mờ (Glassmorphism) */
+.glass-card {
+  background: rgba(30, 41, 59, 0.4);
+  /* slate-800/40 */
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  border-radius: 24px;
+}
+
+/* Các tuỳ chỉnh thẻ văn bản trong bài viết hướng dẫn */
+.prose-premium p {
+  margin-bottom: 1.25rem;
+  line-height: 1.8;
+  color: #cbd5e1;
+  /* slate-300 */
+}
+
+.prose-premium h2,
+.prose-premium h3,
+.prose-premium h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(to right, #60a5fa, #c084fc);
+  /* gradient xanh blue tới fuchsia */
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.prose-premium h2 {
+  font-size: 1.875rem;
+}
+
+.prose-premium h3 {
+  font-size: 1.5rem;
+}
+
+.prose-premium ul {
+  margin-bottom: 1.5rem;
+  padding-left: 1.5rem;
+  list-style-type: none;
+}
+
+.prose-premium li {
+  position: relative;
+  margin-bottom: 0.75rem;
+  padding-left: 1rem;
+  color: #cbd5e1;
+}
+
+.prose-premium-bullet::before {
+  content: "";
+  position: absolute;
+  left: -0.5rem;
+  top: 0.6rem;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #3b82f6;
+  /* blue-500 */
+  box-shadow: 0 0 8px #3b82f6;
+}
+
+/* Custom Scrollbar for a premium feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+  /* slate-900 */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  /* slate-700 */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+  /* slate-600 */
+}
+
+@keyframes buttonPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 30px rgba(255, 255, 255, 0.6), inset 0 4px 10px rgba(255, 255, 255, 0.9);
+  }
+
+  50% {
+    box-shadow: 0 0 60px rgba(0, 229, 255, 0.8), inset 0 4px 10px rgba(255, 255, 255, 0.9);
+  }
+}
+
+@keyframes buttonPulseRing {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 229, 255, 0);
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  50% {
+    box-shadow: 0 0 0 10px rgba(0, 229, 255, 0.2);
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
