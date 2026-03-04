@@ -2,15 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Plus, X, Trash2 } from "lucide-react";
-
-const defaultItems = [
-    { id: "1", text: "Thẻ cào 10k", color: "#E11D48" }, // Rose 600
-    { id: "2", text: "Chúc may mắn lần sau", color: "#1E293B" }, // Slate 800
-    { id: "3", text: "Voucher 50k", color: "#7C3AED" }, // Violet 600
-    { id: "4", text: "Quay lại miễn phí", color: "#0284C7" }, // Sky 600
-    { id: "5", text: "Thẻ cào 20k", color: "#EA580C" }, // Orange 600
-    { id: "6", text: "Bộ gift độc quyền", color: "#059669" }  // Emerald 600
-];
+import {
+    getWheelConfig,
+    saveWheelConfig,
+    getNextSequenceItem,
+    advanceSpinIndex,
+    WheelConfig,
+    WheelItem,
+} from "@/lib/wheelConfig";
 
 const getRandomColor = () => {
     const colors = ["#E11D48", "#7C3AED", "#0284C7", "#EA580C", "#059669", "#D946EF", "#06B6D4", "#EAB308"];
@@ -19,16 +18,46 @@ const getRandomColor = () => {
 
 export default function Wheel() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [items, setItems] = useState(defaultItems);
-    const [isSpinning, setIsSpinning] = useState(false);
-    const [result, setResult] = useState<{ id: string, text: string } | null>(null);
 
+    // Config được load từ localStorage
+    const [config, setConfig] = useState<WheelConfig | null>(null);
+    const [items, setItems] = useState<WheelItem[]>([]);
+
+    const [isSpinning, setIsSpinning] = useState(false);
+    const [result, setResult] = useState<WheelItem | null>(null);
     const [newItemText, setNewItemText] = useState("");
 
     const rotationRef = useRef(0);
     const spinningRef = useRef(false);
 
-    const drawWheel = () => {
+    // Load config từ localStorage sau khi mount (client-side only)
+    useEffect(() => {
+        const cfg = getWheelConfig();
+        setConfig(cfg);
+        setItems(cfg.items);
+    }, []);
+
+    // Khi items thay đổi (do user thêm/xóa trực tiếp trên page chính), sync vào config.
+    // Đồng thời lọc sạch các stale IDs trong spinSequence (IDs không còn tồn tại).
+    const syncItems = (newItems: WheelItem[]) => {
+        setItems(newItems);
+        if (config) {
+            const newIds = new Set(newItems.map(i => i.id));
+            const cleanedSequence = config.spinSequence.filter(id => newIds.has(id));
+            const updated: WheelConfig = {
+                ...config,
+                items: newItems,
+                spinSequence: cleanedSequence,
+                // Nếu con trỏ vượt quá sequence mới, reset về 0
+                spinIndex: Math.min(config.spinIndex, Math.max(0, cleanedSequence.length - 1)),
+            };
+            setConfig(updated);
+            saveWheelConfig(updated);
+        }
+    };
+
+    // ---- Vẽ vòng quay ----
+    const drawWheel = (currentItems: WheelItem[], rotation: number) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
@@ -37,11 +66,11 @@ export default function Wheel() {
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
         const radius = Math.min(centerX, centerY) - 20;
-        const sliceAngle = (2 * Math.PI) / Math.max(items.length, 1);
+        const sliceAngle = (2 * Math.PI) / Math.max(currentItems.length, 1);
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (items.length === 0) {
+        if (currentItems.length === 0) {
             ctx.beginPath();
             ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
             ctx.fillStyle = "#1e293b";
@@ -53,7 +82,7 @@ export default function Wheel() {
             return;
         }
 
-        // Draw shadow glow
+        // Glow outline
         ctx.shadowBlur = 30;
         ctx.shadowColor = "rgba(0, 229, 255, 0.5)";
         ctx.beginPath();
@@ -63,38 +92,34 @@ export default function Wheel() {
         ctx.stroke();
         ctx.shadowBlur = 0;
 
-        for (let i = 0; i < items.length; i++) {
-            const startAngle = rotationRef.current + i * sliceAngle;
+        // Slices
+        for (let i = 0; i < currentItems.length; i++) {
+            const startAngle = rotation + i * sliceAngle;
             const endAngle = startAngle + sliceAngle;
 
             ctx.beginPath();
             ctx.moveTo(centerX, centerY);
             ctx.arc(centerX, centerY, radius, startAngle, endAngle);
             ctx.closePath();
-
-            ctx.fillStyle = items[i].color;
+            ctx.fillStyle = currentItems[i].color;
             ctx.fill();
             ctx.lineWidth = 2;
             ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
             ctx.stroke();
 
-            // Text rendering
+            // Text
             ctx.save();
             ctx.translate(centerX, centerY);
-
             const angle = startAngle + sliceAngle / 2;
-            let normAngle = angle % (2 * Math.PI);
-            if (normAngle < 0) normAngle += 2 * Math.PI;
-
             ctx.rotate(angle);
             ctx.fillStyle = "#ffffff";
             ctx.font = "bold 20px 'Inter', 'Segoe UI', sans-serif";
             ctx.shadowBlur = 4;
             ctx.shadowColor = "rgba(0,0,0,0.8)";
 
-            const textToDraw = items[i].text.length > 20 ? items[i].text.substring(0, 20) + "..." : items[i].text;
+            const textToDraw = currentItems[i].text.length > 20 ? currentItems[i].text.slice(0, 20) + "..." : currentItems[i].text;
+            const normAngle = ((angle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
 
-            // Flip text if on the left side of the wheel
             if (normAngle > Math.PI / 2 && normAngle < (3 * Math.PI) / 2) {
                 ctx.rotate(Math.PI);
                 ctx.textAlign = "left";
@@ -103,11 +128,10 @@ export default function Wheel() {
                 ctx.textAlign = "right";
                 ctx.fillText(textToDraw, radius - 35, 7);
             }
-
             ctx.restore();
         }
 
-        // Center circle with button text
+        // Center circle + text
         ctx.beginPath();
         ctx.arc(centerX, centerY, 55, 0, 2 * Math.PI);
         const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 55);
@@ -116,12 +140,11 @@ export default function Wheel() {
         gradient.addColorStop(1, "#e2e8f0");
         ctx.fillStyle = gradient;
         ctx.fill();
-
         ctx.lineWidth = 6;
         ctx.strokeStyle = "rgba(0, 229, 255, 0.8)";
+        ctx.shadowBlur = 0;
         ctx.stroke();
 
-        // Draw "QUAY NGAY" text on center button
         ctx.fillStyle = "#0f172a";
         ctx.font = "bold 13px 'Inter', 'Segoe UI', sans-serif";
         ctx.textAlign = "center";
@@ -131,19 +154,36 @@ export default function Wheel() {
     };
 
     useEffect(() => {
-        // Handle hydration safely with fonts loading
+        if (items.length === 0) return;
         if (document.fonts) {
-            document.fonts.ready.then(() => {
-                drawWheel();
-            });
+            document.fonts.ready.then(() => drawWheel(items, rotationRef.current));
         } else {
-            drawWheel();
+            drawWheel(items, rotationRef.current);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [items]);
 
+    // ---- Tính góc quay để dừng đúng slice target ----
+    const calcTargetRotation = (targetIdx: number, currentItems: WheelItem[]): number => {
+        const sliceAngle = (2 * Math.PI) / currentItems.length;
+        const pointerAngle = (3 * Math.PI) / 2; // 12 giờ
+
+        // Góc giữa của slice target (tuyệt đối, không xét rotation)
+        const sliceMidAngle = targetIdx * sliceAngle + sliceAngle / 2;
+
+        // Số vòng quay tối thiểu 8-12 vòng
+        const extraSpins = (Math.floor(Math.random() * 5) + 8) * 2 * Math.PI;
+
+        // Để kim dừng đúng giữa slice target:
+        // rotation + sliceMidAngle = pointerAngle (mod 2π)
+        // => rotation = pointerAngle - sliceMidAngle
+        const baseAngle = ((pointerAngle - sliceMidAngle) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+
+        return extraSpins + baseAngle;
+    };
+
     const spin = () => {
-        if (spinningRef.current || items.length === 0) return;
+        if (spinningRef.current || items.length === 0 || !config) return;
 
         setIsSpinning(true);
         spinningRef.current = true;
@@ -153,76 +193,105 @@ export default function Wheel() {
         const targetFrames = 60 * (spinDuration / 1000);
         let currentFrame = 0;
 
-        const randomSpins = Math.floor(Math.random() * 8 + 8);
-        const targetAngle = Math.random() * Math.PI * 2;
-        const finalRotation = (randomSpins * Math.PI * 2) + targetAngle;
+        // Kiểm tra có sequence không, lấy giải tiếp theo
+        const nextItem = getNextSequenceItem(config);
+        let finalRotation: number;
+        let determinedResult: WheelItem;
+        // Track whether we need to advance the pointer (after animation ends)
+        const shouldAdvance = !!nextItem;
 
-        const easeOutCubic = (x: number): number => {
-            return 1 - Math.pow(1 - x, 3);
-        };
+        if (nextItem) {
+            // Có config: quay đến đúng giải đã định
+            const targetIdx = items.findIndex((item) => item.id === nextItem.id);
+            if (targetIdx === -1) {
+                // Giải bị xóa, random
+                const randomIdx = Math.floor(Math.random() * items.length);
+                finalRotation = calcTargetRotation(randomIdx, items);
+                determinedResult = items[randomIdx];
+            } else {
+                finalRotation = calcTargetRotation(targetIdx, items);
+                determinedResult = nextItem;
+            }
+        } else {
+            // Ngẫu nhiên
+            const randomIdx = Math.floor(Math.random() * items.length);
+            finalRotation = calcTargetRotation(randomIdx, items);
+            determinedResult = items[randomIdx];
+        }
+
+        const startRotation = rotationRef.current;
+        const easeOutCubic = (x: number) => 1 - Math.pow(1 - x, 3);
 
         const animate = () => {
             currentFrame++;
             const progress = currentFrame / targetFrames;
             const easedProgress = easeOutCubic(progress);
 
-            rotationRef.current = easedProgress * finalRotation;
-            drawWheel();
+            rotationRef.current = startRotation + easedProgress * finalRotation;
+            drawWheel(items, rotationRef.current);
 
             if (currentFrame < targetFrames) {
                 requestAnimationFrame(animate);
             } else {
                 spinningRef.current = false;
                 setIsSpinning(false);
-                calculateResult();
+                // Advance pointer AFTER animation ends (not at spin start)
+                if (shouldAdvance) {
+                    setConfig((prev) => {
+                        if (!prev) return prev;
+                        const updated = advanceSpinIndex(prev);
+                        return updated;
+                    });
+                }
+                setResult(determinedResult);
             }
         };
 
         requestAnimationFrame(animate);
     };
 
-    const calculateResult = () => {
-        if (items.length === 0) return;
-
-        // Kim chỉ cố định ở 12 giờ = 270° = 3π/2
-        const pointerAngle = (3 * Math.PI) / 2;
-        const sliceAngle = (2 * Math.PI) / items.length;
-
-        // Góc tương đối giữa kim và vòng quay — normalize về [0, 2π)
-        // Công thức chuẩn: không cần đảo chiều vì canvas vẽ slice theo chiều kim đồng hồ
-        const rotation = rotationRef.current;
-        const relativeAngle = ((pointerAngle - rotation) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
-
-        const hitIndex = Math.floor(relativeAngle / sliceAngle) % items.length;
-
-        setResult(items[hitIndex]);
-    };
-
+    // ---- Quản lý items trực tiếp trên page ----
     const handleAddItem = (e: React.FormEvent) => {
         e.preventDefault();
         if (!newItemText.trim()) return;
-
-        setItems([
-            ...items,
-            {
-                id: Date.now().toString(),
-                text: newItemText.trim(),
-                color: getRandomColor()
-            }
-        ]);
+        const newItem: WheelItem = { id: Date.now().toString(), text: newItemText.trim(), color: getRandomColor() };
+        syncItems([...items, newItem]);
         setNewItemText("");
     };
 
-    const removeItem = (id: string) => {
-        setItems(items.filter(item => item.id !== id));
-    };
+    const removeItem = (id: string) => syncItems(items.filter((item) => item.id !== id));
 
     const removeResultItem = () => {
-        if (result) {
-            removeItem(result.id);
-            setResult(null);
+        if (!result || !config) return;
+
+        const removedId = result.id;
+        // Tìm vị trí của item trong sequence
+        const posInSequence = config.spinSequence.indexOf(removedId);
+
+        const newItems = items.filter(item => item.id !== removedId);
+        const newIds = new Set(newItems.map(i => i.id));
+        const cleanedSequence = config.spinSequence.filter(id => newIds.has(id));
+
+        // Nếu item bị xoá nằm trước con trỏ hiện tại trong sequence
+        // (tức là vừa được quay ra), cần giảm spinIndex để không bị bỏ qua lần tiếp theo
+        let newSpinIndex = config.spinIndex;
+        if (posInSequence >= 0 && posInSequence < config.spinIndex) {
+            newSpinIndex = Math.max(0, config.spinIndex - 1);
         }
-    }
+        newSpinIndex = Math.min(newSpinIndex, cleanedSequence.length);
+
+        const updated: WheelConfig = {
+            ...config,
+            items: newItems,
+            spinSequence: cleanedSequence,
+            spinIndex: newSpinIndex,
+        };
+
+        setItems(newItems);
+        setConfig(updated);
+        saveWheelConfig(updated);
+        setResult(null);
+    };
 
     return (
         <div className="py-8 relative">
@@ -231,15 +300,13 @@ export default function Wheel() {
 
                     {/* Bánh Xe May Mắn */}
                     <div className="xl:col-span-8 flex flex-col items-center justify-center">
-                        {/* Container relative wrap khít canvas */}
                         <div className="relative w-full max-w-[550px] mx-auto mb-6 aspect-square">
-
-                            {/* Pointer (Kim chỉ) */}
-                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-40 drop-shadow-[0_4px_10px_rgba(255,255,255,0.4)] transition-transform duration-100 ease-in-out">
+                            {/* Kim chỉ */}
+                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-40 drop-shadow-[0_4px_10px_rgba(255,255,255,0.4)]">
                                 <svg width="56" height="74" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M12 32L0 8C0 3.58172 3.58172 0 8 0H16C20.4183 0 24 3.58172 24 8L12 32Z" fill="url(#paint0_linear)" />
+                                    <path d="M12 32L0 8C0 3.58172 3.58172 0 8 0H16C20.4183 0 24 3.58172 24 8L12 32Z" fill="url(#ptr_grad)" />
                                     <defs>
-                                        <linearGradient id="paint0_linear" x1="12" y1="0" x2="12" y2="32" gradientUnits="userSpaceOnUse">
+                                        <linearGradient id="ptr_grad" x1="12" y1="0" x2="12" y2="32" gradientUnits="userSpaceOnUse">
                                             <stop stopColor="#00E5FF" />
                                             <stop offset="1" stopColor="#6100FF" />
                                         </linearGradient>
@@ -248,41 +315,53 @@ export default function Wheel() {
                             </div>
 
                             {/* Glow nền */}
-                            <div className="absolute inset-4 bg-gradient-to-tr from-fuchsia-600 to-blue-600 rounded-full blur-[60px] opacity-20 -z-10"></div>
+                            <div className="absolute inset-4 bg-gradient-to-tr from-fuchsia-600 to-blue-600 rounded-full blur-[60px] opacity-20 z-0" />
 
                             {/* Canvas */}
                             <canvas
                                 ref={canvasRef}
                                 width={600}
                                 height={600}
-                                className="absolute top-0 left-0 w-full h-full z-10 object-contain drop-shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+                                className="absolute top-0 left-0 w-full h-full z-10 object-contain"
                             />
 
-                            {/* Nút quay trong suốt — chồng đúng tâm canvas.
-                                Kích thước 110px = bán kính tâm vòng quay (55*2).
-                                Căn giữa: top/left = 50% của container, margin = -55px (nửa kích thước).
-                              */}
+                            {/* Transparent click overlay */}
                             <button
                                 onClick={spin}
                                 disabled={isSpinning || items.length === 0}
                                 aria-label="Quay ngay"
-                                className="absolute z-30 rounded-full bg-transparent border-0 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 hover:scale-105 active:scale-95 transition-transform duration-200"
+                                className="absolute z-30 rounded-full bg-transparent border-0 cursor-pointer disabled:cursor-not-allowed hover:scale-105 active:scale-95 transition-transform duration-200"
                                 style={{
-                                    width: '18.33%',       /* 110px / 600px canvas width */
-                                    height: '18.33%',      /* 110px / 600px canvas height */
-                                    top: '50%',
-                                    left: '50%',
-                                    transform: 'translate(-50%, -50%)',
-                                    animation: isSpinning ? 'none' : 'buttonPulseRing 2s infinite ease-in-out'
+                                    width: "18.33%",
+                                    height: "18.33%",
+                                    top: "50%",
+                                    left: "50%",
+                                    transform: "translate(-50%, -50%)",
+                                    animation: isSpinning ? "none" : "buttonPulseRing 2s infinite ease-in-out",
                                 }}
                             />
                         </div>
+
+                        {/* Sequence status indicator — chỉ hiện khi có sequence hợp lệ */}
+                        {config && (() => {
+                            const validSeq = config.spinSequence.filter(id => items.some(it => it.id === id));
+                            if (validSeq.length === 0) return null;
+                            const remaining = validSeq.length - config.spinIndex;
+                            if (remaining <= 0) return null;
+                            return (
+                                <div className="flex items-center gap-2 px-4 py-2 bg-violet-500/10 border border-violet-500/20 rounded-full text-violet-300 text-sm">
+                                    <span className="w-2 h-2 bg-violet-400 rounded-full animate-pulse" />
+                                    Lần quay {config.spinIndex + 1}
+                                    {/* {validSeq.length} */}
+                                </div>
+                            );
+                        })()}
                     </div>
 
-                    {/* Danh sách và Nút Nhập phần thưởng */}
+                    {/* Danh sách và Nhập phần thưởng */}
                     <div className="xl:col-span-4 w-full">
                         <div className="glass-card p-6 h-full min-h-[500px] flex flex-col justify-between relative overflow-hidden">
-                            <div className="absolute -right-20 -top-20 w-40 h-40 bg-fuchsia-600/20 blur-[60px] rounded-full"></div>
+                            <div className="absolute -right-20 -top-20 w-40 h-40 bg-fuchsia-600/20 blur-[60px] rounded-full" />
 
                             <div className="relative z-10 w-full flex flex-col h-full">
                                 <div className="mb-6">
@@ -296,13 +375,10 @@ export default function Wheel() {
                                         placeholder="Thêm giải thưởng mới..."
                                         value={newItemText}
                                         onChange={(e) => setNewItemText(e.target.value)}
-                                        className="flex-1 bg-slate-900/60 border border-slate-700/50 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                        className="flex-1 bg-slate-900/60 border border-slate-700/50 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                                     />
-                                    <button
-                                        type="submit"
-                                        disabled={!newItemText.trim() || isSpinning}
-                                        className="px-4 py-3 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl hover:bg-blue-600 hover:text-white transition-all disabled:opacity-50"
-                                    >
+                                    <button type="submit" disabled={!newItemText.trim() || isSpinning}
+                                        className="px-4 py-3 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl hover:bg-blue-600 hover:text-white transition-all disabled:opacity-50">
                                         <Plus size={20} />
                                     </button>
                                 </form>
@@ -311,32 +387,23 @@ export default function Wheel() {
                                     {items.map((item) => (
                                         <div key={item.id} className="group flex items-center justify-between p-3 rounded-xl bg-slate-800/40 border border-white/5 hover:border-white/10 transition-colors">
                                             <div className="flex items-center gap-3 overflow-hidden">
-                                                <span className="w-4 h-4 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: item.color }}></span>
+                                                <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
                                                 <span className="text-slate-300 font-medium truncate">{item.text}</span>
                                             </div>
-                                            <button
-                                                onClick={() => removeItem(item.id)}
-                                                disabled={isSpinning}
-                                                className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 p-1.5 transition-all disabled:opacity-0"
-                                                title="Xóa phần thưởng"
-                                            >
+                                            <button onClick={() => removeItem(item.id)} disabled={isSpinning}
+                                                className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 p-1.5 transition-all disabled:opacity-0">
                                                 <Trash2 size={16} />
                                             </button>
                                         </div>
                                     ))}
                                     {items.length === 0 && (
-                                        <div className="text-center py-10 text-slate-500">
-                                            Danh sách trống. Vui lòng thêm mục mới phía trên.
-                                        </div>
+                                        <div className="text-center py-10 text-slate-500">Danh sách trống. Vui lòng thêm mục mới phía trên.</div>
                                     )}
                                 </div>
 
                                 <div className="pt-4 mt-auto border-t border-slate-800">
-                                    <button
-                                        onClick={() => setItems([])}
-                                        disabled={isSpinning || items.length === 0}
-                                        className="w-full py-2.5 text-sm font-semibold text-slate-400 hover:text-red-400 transition-colors disabled:opacity-50"
-                                    >
+                                    <button onClick={() => syncItems([])} disabled={isSpinning || items.length === 0}
+                                        className="w-full py-2.5 text-sm font-semibold text-slate-400 hover:text-red-400 transition-colors disabled:opacity-50">
                                         Xóa tất cả danh sách
                                     </button>
                                 </div>
@@ -345,45 +412,34 @@ export default function Wheel() {
                     </div>
                 </div>
 
-                {/* Modal Kết Quả Lơ lửng màn hình */}
+                {/* Modal Kết Quả */}
                 {result && !isSpinning && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"></div>
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" />
                         <div className="relative bg-slate-900 border border-slate-700 p-8 md:p-12 rounded-3xl shadow-[0_0_80px_rgba(59,130,246,0.3)] max-w-lg w-full text-center animate-in zoom-in-95 duration-500">
-                            <div className="absolute -inset-10 bg-gradient-to-tr from-fuchsia-600/30 to-blue-600/30 rounded-3xl blur-[80px] -z-10"></div>
-
-                            <button
-                                onClick={() => setResult(null)}
-                                className="absolute top-4 right-4 text-slate-400 hover:text-white p-2"
-                            >
+                            <div className="absolute -inset-10 bg-gradient-to-tr from-fuchsia-600/30 to-blue-600/30 rounded-3xl blur-[80px] -z-10" />
+                            <button onClick={() => setResult(null)} className="absolute top-4 right-4 text-slate-400 hover:text-white p-2">
                                 <X size={24} />
                             </button>
-
                             <div className="mb-8">
                                 <span className="inline-block py-1.5 px-4 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-bold tracking-widest uppercase mb-6">Kết quả vòng quay</span>
                                 <h2 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-yellow-500 font-display break-words">
                                     {result.text}
                                 </h2>
                             </div>
-
                             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                                <button
-                                    onClick={() => setResult(null)}
-                                    className="px-6 py-3 bg-white text-slate-900 rounded-xl font-bold hover:bg-slate-200 transition-colors shadow-lg shadow-white/10"
-                                >
+                                <button onClick={() => setResult(null)}
+                                    className="px-6 py-3 bg-white text-slate-900 rounded-xl font-bold hover:bg-slate-200 transition-colors shadow-lg shadow-white/10">
                                     Tuyệt vời! Quay lại
                                 </button>
-                                <button
-                                    onClick={removeResultItem}
-                                    className="px-6 py-3 bg-slate-800 text-slate-300 rounded-xl font-medium hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/50 border border-slate-700 transition-all"
-                                >
+                                <button onClick={removeResultItem}
+                                    className="px-6 py-3 bg-slate-800 text-slate-300 rounded-xl font-medium hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/50 border border-slate-700 transition-all">
                                     Xoá khỏi danh sách
                                 </button>
                             </div>
                         </div>
                     </div>
                 )}
-
             </div>
         </div>
     );

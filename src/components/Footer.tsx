@@ -105,8 +105,14 @@ export default function Footer() {
                     <p className="text-sm text-slate-500">
                         &copy; {new Date().getFullYear()} Vòng Quay May Mắn. Premium Edition.
                     </p>
-                    <div className="text-xs text-slate-600 font-medium tracking-widest uppercase">
-                        Designed for the Future
+                    <div className="flex items-center gap-6">
+                        <div className="text-xs text-slate-600 font-medium tracking-widest uppercase">
+                            Designed for the Future
+                        </div>
+                        <Link href="/admin"
+                            className="text-[10px] text-slate-700 hover:text-slate-500 transition-colors tracking-widest uppercase font-medium">
+                            Admin
+                        </Link>
                     </div>
                 </div>
             </div>
